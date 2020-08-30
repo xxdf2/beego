@@ -41,6 +41,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -53,138 +54,148 @@ import (
 // Configer defines how to get and set value from configuration raw data.
 type Configer interface {
 	// support section::key type in given key when using ini type.
-	Set(key, val string) error
+	Set(ctx context.Context, key, val string) error
 
 	// support section::key type in key string when using ini and json type; Int,Int64,Bool,Float,DIY are same.
-	String(key string) string
+	String(ctx context.Context, key string) (string, error)
 	// get string slice
-	Strings(key string) []string
-	Int(key string) (int, error)
-	Int64(key string) (int64, error)
-	Bool(key string) (bool, error)
-	Float(key string) (float64, error)
+	Strings(ctx context.Context, key string) ([]string, error)
+	Int(ctx context.Context, key string) (int, error)
+	Int64(ctx context.Context, key string) (int64, error)
+	Bool(ctx context.Context, key string) (bool, error)
+	Float(ctx context.Context, key string) (float64, error)
 	// support section::key type in key string when using ini and json type; Int,Int64,Bool,Float,DIY are same.
-	DefaultString(key string, defaultVal string) string
+	DefaultString(ctx context.Context, key string, defaultVal string) string
 	// get string slice
-	DefaultStrings(key string, defaultVal []string) []string
-	DefaultInt(key string, defaultVal int) int
-	DefaultInt64(key string, defaultVal int64) int64
-	DefaultBool(key string, defaultVal bool) bool
-	DefaultFloat(key string, defaultVal float64) float64
-	DIY(key string) (interface{}, error)
-	GetSection(section string) (map[string]string, error)
+	DefaultStrings(ctx context.Context, key string, defaultVal []string) []string
+	DefaultInt(ctx context.Context, key string, defaultVal int) int
+	DefaultInt64(ctx context.Context, key string, defaultVal int64) int64
+	DefaultBool(ctx context.Context, key string, defaultVal bool) bool
+	DefaultFloat(ctx context.Context, key string, defaultVal float64) float64
+	DIY(ctx context.Context, key string) (interface{}, error)
 
-	Unmarshaler(obj interface{}) error
-	Sub(key string) (Configer, error)
-	OnChange(fn func(cfg Configer))
-	// GetByPrefix(prefix string) ([]byte, error)
-	// GetSerializer() Serializer
-	SaveConfigFile(filename string) error
+	GetSection(ctx context.Context, section string) (map[string]string, error)
+
+	Unmarshaler(ctx context.Context, prefix string, obj interface{}, opt ...DecodeOption) error
+	Sub(ctx context.Context, key string) (Configer, error)
+	OnChange(ctx context.Context, key string, fn func(value string))
+	SaveConfigFile(ctx context.Context, filename string) error
 }
 
 type BaseConfiger struct {
 	// The reader should support key like "a.b.c"
-	reader func(key string) (string, error)
+	reader func(ctx context.Context, key string) (string, error)
 }
 
-func (c *BaseConfiger) Int(key string) (int, error) {
-	res, err := c.reader(key)
+func NewBaseConfiger(reader func(ctx context.Context, key string) (string, error)) BaseConfiger {
+	return BaseConfiger{
+		reader: reader,
+	}
+}
+
+func (c *BaseConfiger) Int(ctx context.Context, key string) (int, error) {
+	res, err := c.reader(context.TODO(), key)
 	if err != nil {
 		return 0, err
 	}
 	return strconv.Atoi(res)
 }
 
-func (c *BaseConfiger) Int64(key string) (int64, error) {
-	res, err := c.reader(key)
+func (c *BaseConfiger) Int64(ctx context.Context, key string) (int64, error) {
+	res, err := c.reader(context.TODO(), key)
 	if err != nil {
 		return 0, err
 	}
 	return strconv.ParseInt(res, 10, 64)
 }
 
-func (c *BaseConfiger) Bool(key string) (bool, error) {
-	res, err := c.reader(key)
+func (c *BaseConfiger) Bool(ctx context.Context, key string) (bool, error) {
+	res, err := c.reader(context.TODO(), key)
 	if err != nil {
 		return false, err
 	}
-	return strconv.ParseBool(res)
+	return ParseBool(res)
 }
 
-func (c *BaseConfiger) Float(key string) (float64, error) {
-	res, err := c.reader(key)
+func (c *BaseConfiger) Float(ctx context.Context, key string) (float64, error) {
+	res, err := c.reader(context.TODO(), key)
 	if err != nil {
 		return 0, err
 	}
 	return strconv.ParseFloat(res, 64)
 }
 
-func (c *BaseConfiger) DefaultString(key string, defaultVal string) string {
-	if res := c.String(key); res != "" {
+// DefaultString returns the string value for a given key.
+// if err != nil or value is empty return defaultval
+func (c *BaseConfiger) DefaultString(ctx context.Context, key string, defaultVal string) string {
+	if res, err := c.String(ctx, key); res != "" && err == nil {
 		return res
 	}
 	return defaultVal
 }
 
-func (c *BaseConfiger) DefaultStrings(key string, defaultVal []string) []string {
-	if res := c.Strings(key); len(res) > 0 {
+// DefaultStrings returns the []string value for a given key.
+// if err != nil return defaultval
+func (c *BaseConfiger) DefaultStrings(ctx context.Context, key string, defaultVal []string) []string {
+	if res, err := c.Strings(ctx, key); len(res) > 0 && err == nil {
 		return res
 	}
 	return defaultVal
 }
 
-func (c *BaseConfiger) DefaultInt(key string, defaultVal int) int {
-	if res, err := c.Int(key); err == nil {
+func (c *BaseConfiger) DefaultInt(ctx context.Context, key string, defaultVal int) int {
+	if res, err := c.Int(ctx, key); err == nil {
 		return res
 	}
 	return defaultVal
 }
 
-func (c *BaseConfiger) DefaultInt64(key string, defaultVal int64) int64 {
-	if res, err := c.Int64(key); err == nil {
+func (c *BaseConfiger) DefaultInt64(ctx context.Context, key string, defaultVal int64) int64 {
+	if res, err := c.Int64(ctx, key); err == nil {
 		return res
 	}
 	return defaultVal
 }
 
-func (c *BaseConfiger) DefaultBool(key string, defaultVal bool) bool {
-	if res, err := c.Bool(key); err == nil {
+func (c *BaseConfiger) DefaultBool(ctx context.Context, key string, defaultVal bool) bool {
+	if res, err := c.Bool(ctx, key); err == nil {
 		return res
 	}
 	return defaultVal
 }
-func (c *BaseConfiger) DefaultFloat(key string, defaultVal float64) float64 {
-	if res, err := c.Float(key); err == nil {
+func (c *BaseConfiger) DefaultFloat(ctx context.Context, key string, defaultVal float64) float64 {
+	if res, err := c.Float(ctx, key); err == nil {
 		return res
 	}
 	return defaultVal
 }
 
-func (c *BaseConfiger) String(key string) string {
-	res, _ := c.reader(key)
-	return res
+func (c *BaseConfiger) String(ctx context.Context, key string) (string, error) {
+	return c.reader(context.TODO(), key)
 }
 
-func (c *BaseConfiger) Strings(key string) []string {
-	res, err := c.reader(key)
+// Strings returns the []string value for a given key.
+// Return nil if config value does not exist or is empty.
+func (c *BaseConfiger) Strings(ctx context.Context, key string) ([]string, error) {
+	res, err := c.String(nil, key)
 	if err != nil || res == "" {
-		return nil
+		return nil, err
 	}
-	return strings.Split(res, ";")
+	return strings.Split(res, ";"), nil
 }
 
 // TODO remove this before release v2.0.0
-func (c *BaseConfiger) Unmarshaler(obj interface{}) error {
+func (c *BaseConfiger) Unmarshaler(ctx context.Context, prefix string, obj interface{}, opt ...DecodeOption) error {
 	return errors.New("unsupported operation")
 }
 
 // TODO remove this before release v2.0.0
-func (c *BaseConfiger) Sub(key string) (Configer, error) {
+func (c *BaseConfiger) Sub(ctx context.Context, key string) (Configer, error) {
 	return nil, errors.New("unsupported operation")
 }
 
 // TODO remove this before release v2.0.0
-func (c *BaseConfiger) OnChange(fn func(cfg Configer)) {
+func (c *BaseConfiger) OnChange(ctx context.Context, key string, fn func(value string)) {
 	// do nothing
 }
 
@@ -360,4 +371,9 @@ func ToString(x interface{}) string {
 
 	// Fallback to fmt package for anything else like numeric types
 	return fmt.Sprint(x)
+}
+
+type DecodeOption func(options decodeOptions)
+
+type decodeOptions struct {
 }

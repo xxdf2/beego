@@ -15,6 +15,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -29,99 +30,71 @@ func (c *fakeConfigContainer) getData(key string) string {
 	return c.data[strings.ToLower(key)]
 }
 
-func (c *fakeConfigContainer) Set(key, val string) error {
+func (c *fakeConfigContainer) Set(ctx context.Context, key, val string) error {
 	c.data[strings.ToLower(key)] = val
 	return nil
 }
 
-func (c *fakeConfigContainer) String(key string) string {
-	return c.getData(key)
-}
-
-func (c *fakeConfigContainer) DefaultString(key string, defaultval string) string {
-	v := c.String(key)
-	if v == "" {
-		return defaultval
-	}
-	return v
-}
-
-func (c *fakeConfigContainer) Strings(key string) []string {
-	v := c.String(key)
-	if v == "" {
-		return nil
-	}
-	return strings.Split(v, ";")
-}
-
-func (c *fakeConfigContainer) DefaultStrings(key string, defaultval []string) []string {
-	v := c.Strings(key)
-	if v == nil {
-		return defaultval
-	}
-	return v
-}
-
-func (c *fakeConfigContainer) Int(key string) (int, error) {
+func (c *fakeConfigContainer) Int(ctx context.Context, key string) (int, error) {
 	return strconv.Atoi(c.getData(key))
 }
 
-func (c *fakeConfigContainer) DefaultInt(key string, defaultval int) int {
-	v, err := c.Int(key)
+func (c *fakeConfigContainer) DefaultInt(ctx context.Context, key string, defaultVal int) int {
+	v, err := c.Int(ctx, key)
 	if err != nil {
-		return defaultval
+		return defaultVal
 	}
 	return v
 }
 
-func (c *fakeConfigContainer) Int64(key string) (int64, error) {
+func (c *fakeConfigContainer) Int64(ctx context.Context, key string) (int64, error) {
 	return strconv.ParseInt(c.getData(key), 10, 64)
 }
 
-func (c *fakeConfigContainer) DefaultInt64(key string, defaultval int64) int64 {
-	v, err := c.Int64(key)
+func (c *fakeConfigContainer) DefaultInt64(ctx context.Context, key string, defaultVal int64) int64 {
+	v, err := c.Int64(ctx, key)
 	if err != nil {
-		return defaultval
+		return defaultVal
 	}
 	return v
 }
 
-func (c *fakeConfigContainer) Bool(key string) (bool, error) {
+func (c *fakeConfigContainer) Bool(ctx context.Context, key string) (bool, error) {
 	return ParseBool(c.getData(key))
 }
 
-func (c *fakeConfigContainer) DefaultBool(key string, defaultval bool) bool {
-	v, err := c.Bool(key)
+func (c *fakeConfigContainer) DefaultBool(ctx context.Context, key string, defaultVal bool) bool {
+	v, err := c.Bool(ctx, key)
 	if err != nil {
-		return defaultval
+		return defaultVal
 	}
 	return v
 }
 
-func (c *fakeConfigContainer) Float(key string) (float64, error) {
+func (c *fakeConfigContainer) Float(ctx context.Context, key string) (float64, error) {
 	return strconv.ParseFloat(c.getData(key), 64)
 }
 
-func (c *fakeConfigContainer) DefaultFloat(key string, defaultval float64) float64 {
-	v, err := c.Float(key)
+func (c *fakeConfigContainer) DefaultFloat(ctx context.Context, key string, defaultVal float64) float64 {
+	v, err := c.Float(ctx, key)
 	if err != nil {
-		return defaultval
+		return defaultVal
 	}
 	return v
 }
 
-func (c *fakeConfigContainer) DIY(key string) (interface{}, error) {
+func (c *fakeConfigContainer) DIY(ctx context.Context, key string) (interface{}, error) {
 	if v, ok := c.data[strings.ToLower(key)]; ok {
 		return v, nil
 	}
 	return nil, errors.New("key not find")
 }
 
-func (c *fakeConfigContainer) GetSection(section string) (map[string]string, error) {
+func (c *fakeConfigContainer) GetSection(ctx context.Context, section string) (map[string]string, error) {
 	return nil, errors.New("not implement in the fakeConfigContainer")
 }
 
-func (c *fakeConfigContainer) SaveConfigFile(filename string) error {
+func (c *fakeConfigContainer) SaveConfigFile(ctx context.Context, filename string) error {
 	return errors.New("not implement in the fakeConfigContainer")
 }
 
@@ -129,7 +102,11 @@ var _ Configer = new(fakeConfigContainer)
 
 // NewFakeConfig return a fake Configer
 func NewFakeConfig() Configer {
-	return &fakeConfigContainer{
+	res := &fakeConfigContainer{
 		data: make(map[string]string),
 	}
+	res.BaseConfiger = NewBaseConfiger(func(ctx context.Context, key string) (string, error) {
+		return res.getData(key), nil
+	})
+	return res
 }

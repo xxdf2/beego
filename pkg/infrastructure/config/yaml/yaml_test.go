@@ -70,7 +70,8 @@ func TestYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if yamlconf.String("appname") != "beeapi" {
+	res, _ := yamlconf.String(nil, "appname")
+	if res != "beeapi" {
 		t.Fatal("appname not equal to beeapi")
 	}
 
@@ -83,19 +84,19 @@ func TestYaml(t *testing.T) {
 
 		switch v.(type) {
 		case int:
-			value, err = yamlconf.Int(k)
+			value, err = yamlconf.Int(nil, k)
 		case int64:
-			value, err = yamlconf.Int64(k)
+			value, err = yamlconf.Int64(nil, k)
 		case float64:
-			value, err = yamlconf.Float(k)
+			value, err = yamlconf.Float(nil, k)
 		case bool:
-			value, err = yamlconf.Bool(k)
+			value, err = yamlconf.Bool(nil, k)
 		case []string:
-			value = yamlconf.Strings(k)
+			value, err = yamlconf.Strings(nil, k)
 		case string:
-			value = yamlconf.String(k)
+			value, err = yamlconf.String(nil, k)
 		default:
-			value, err = yamlconf.DIY(k)
+			value, err = yamlconf.DIY(nil, k)
 		}
 		if err != nil {
 			t.Errorf("get key %q value fatal,%v err %s", k, v, err)
@@ -105,10 +106,11 @@ func TestYaml(t *testing.T) {
 
 	}
 
-	if err = yamlconf.Set("name", "astaxie"); err != nil {
+	if err = yamlconf.Set(nil, "name", "astaxie"); err != nil {
 		t.Fatal(err)
 	}
-	if yamlconf.String("name") != "astaxie" {
+	res, _ = yamlconf.String(nil, "name")
+	if res != "astaxie" {
 		t.Fatal("get name error")
 	}
 
